@@ -1,6 +1,6 @@
-import GetDB from "../config/DB";
+import GetDB from "../config/DB.js";
 
-const processPurchases = async (buyerId, ListingId) => {
+const processPurchases = async (buyerId, listingId) => {
     const connection = await GetDB.getConnection();
     try {
         await connection.beginTransaction();
@@ -22,13 +22,12 @@ const processPurchases = async (buyerId, ListingId) => {
             await connection.query('UPDATE market_listings SET status = "sold" WHERE listing_id = ?', [listingId]);
 
             await connection.query('INSERT INTO transactions (listing_id, buyer_id, seller_id, amount) VALUES (?, ?, ?, ?)',[listingId, buyerId, seller_id, price]);
-            
+
             await connection.commit();
             return { success: true, message: 'Compra realizada con éxito' };
     } catch (error) {
         console.error('❌ Error al iniciar la transacción:', error.message);
         await connection.rollback();
-        throw error;
         return { success: false, message: error.message };
     } finally {
         connection.release();
