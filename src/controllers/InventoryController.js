@@ -1,4 +1,4 @@
-import db from '../config/db.js';
+import db from '../config/DB.js';
 
 const getUserInventory = async (req, res) => {
     const userId = req.user.userId; 
