@@ -10,6 +10,11 @@ const processPurchases = async (buyerId, listingId) => {
                 throw new Error('Oferta no disponible');
             }
             const{ price, seller_id ,inventory_id} = listing[0];
+
+            if (seller_id === buyerId) {
+                throw new Error('No puedes comprar tu propia oferta');
+            }
+
             const [buyer] = await connection.query('SELECT wallet_balance FROM users WHERE user_id = ?', [buyerId]);
             if (buyer[0].wallet_balance < price) {
                 throw new Error('Fondos insuficientes');
@@ -34,3 +39,5 @@ const processPurchases = async (buyerId, listingId) => {
 
     }
 };
+
+export { processPurchases };
