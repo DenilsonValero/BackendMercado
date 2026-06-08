@@ -1,10 +1,10 @@
 import express from 'express';
 const router = express.Router();
-import { getUserInventory, claimTestItem } from '../controllers/InventoryController.js';
-import { verifyToken } from '../middleware/authMiddleware.js';
+import InventoryController from '../controllers/InventoryController.js';
+import verifyToken from '../middlewares/AuthMiddlewares.js';
 
 
-router.get('/', verifyToken, getUserInventory);
-router.post('/claim-test', verifyToken, claimTestItem);
+router.get('/', verifyToken, InventoryController.getUserInventory);
+router.post('/claim-test', verifyToken, InventoryController.claimTestItem);
 
 export default router;
