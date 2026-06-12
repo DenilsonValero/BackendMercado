@@ -22,7 +22,7 @@ const processPurchases = async (buyerId, listingId) => {
             await connection.query('UPDATE users SET wallet_balance = wallet_balance - ? WHERE user_id = ?', [price, buyerId]);
             await connection.query('UPDATE users SET wallet_balance = wallet_balance + ? WHERE user_id = ?', [price, seller_id]);
 
-            await connection.query('UPDATE inventory SET user_id = ? WHERE inventory_id = ?', [buyerId, inventory_id]);
+            await connection.query('UPDATE user_inventory SET user_id = ? WHERE inventory_id = ?', [buyerId, inventory_id]);
 
             await connection.query('UPDATE market_listings SET status = "sold" WHERE listing_id = ?', [listingId]);
 

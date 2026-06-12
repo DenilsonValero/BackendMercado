@@ -1,17 +1,19 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import db from '../config/db.js';
+import authService from '../service/authService.js';
 
-const register = async (req, res) => {
+export const register = async (req, res) => {
     const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+        return res.status(400).json({ error: 'Todos los campos son obligatorios' });
+    }
+
     try {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
-        const [result] = await db.query(
-            'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
-            [username, email, passwordHash]
-        );
+        const result = await authService.createUser(username, email, passwordHash);
 
         res.status(201).json({ message: 'Usuario creado con éxito', userId: result.insertId });
     } catch (error) {
@@ -22,11 +24,15 @@ const register = async (req, res) => {
     }
 };
 
-const login = async (req, res) => {
+export const login = async (req, res) => {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Todos los campos son obligatorios' });
+    }
+
     try {
-        const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+        const users = await authService.getUserByEmail(email);
         const user = users[0];
 
         if (!user) {
@@ -50,4 +56,21 @@ const login = async (req, res) => {
     }
 };
 
-export default { register, login };
+export const profile = async (req, res) => {
+    try {
+        const targetUserId = req.params.id || req.user.userId;
+
+        const users = await authService.getUserById(targetUserId);
+
+        if (!users || users.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const user = users[0];
+        const inventoryCount = await authService.getUserInventoryCount(targetUserId);
+
+        res.json({ ...user, inventory_items: inventoryCount });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener el perfil' });
+    }
+};
