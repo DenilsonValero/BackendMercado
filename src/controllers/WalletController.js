@@ -1,8 +1,9 @@
+import db from '../config/DB.js';
+
 const addBalance = async (req, res) => {
     const { amount } = req.body;
-    const userId = req.user.userId; // Este dato viene de tu authMiddleware
+    const userId = req.user.userId; 
 
-    // Validación básica de seguridad
     if (!amount || amount <= 0) {
         return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
