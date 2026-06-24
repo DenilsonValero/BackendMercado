@@ -5,7 +5,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mysql2": "^3.22.3"
+    "mysql2": "^3.22.3",
+    "socket.io": "^4.8.3"
   },
   "name": "backendmercado",
   "version": "1.0.0",
@@ -14,7 +15,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],
   "author": "Denilson Valero",

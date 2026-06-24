@@ -6,3 +6,6 @@ logs
 npm-debug.log*
 #.env
 .env
+#.test
+test
+jest.config.js
