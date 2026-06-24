@@ -14,15 +14,18 @@ const pool = mysql.createPool({
 
 const GetDB = pool.promise();
 
-(async () => {
-    try {
-        const connection = await GetDB.getConnection();
-        console.log('📦 Conectado con exito ');
-        
-        connection.release(); 
-    } catch (error) {
-        console.error('❌ Error al conectar :', error.message);
-    }
-})();
+// AQUÍ ESTÁ EL CAMBIO CLAVE: Solo conectamos si NO estamos en modo test
+if (process.env.NODE_ENV !== 'test') {
+    (async () => {
+        try {
+            const connection = await GetDB.getConnection();
+            console.log('📦 Conectado con exito ');
+            
+            connection.release(); 
+        } catch (error) {
+            console.error('❌ Error al conectar :', error.message);
+        }
+    })();
+}
 
 export default GetDB;
