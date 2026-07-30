@@ -1,117 +1,54 @@
-import { processPurchases } from '../service/marketService.js';
-import GetDB from '../config/DB.js';
+import { cancelListing, createListing, getActiveListings, getUserTransactions, purchaseListing } from '../service/marketService.js';
+import { money, pagination, positiveId } from '../shared/validation.js';
 
-const getActiveListings = async (req, res) => {
+const getListings = async (req, res, next) => {
     try {
-        const connection = await GetDB.getConnection();
-        const [listings] = await connection.query(
-            `SELECT ml.listing_id, ml.price, ml.listed_at, i.name, i.description, i.rarity, i.image_url, u.username AS seller_name
-            FROM market_listings ml
-            INNER JOIN user_inventory ui ON ml.inventory_id = ui.inventory_id
-            INNER JOIN items i ON ui.item_id = i.item_id
-            INNER JOIN users u ON ml.seller_id = u.user_id
-            WHERE ml.status = 'active'`
-        );
-        connection.release();
-        
-        res.json(listings);
+        const paging = pagination(req.query);
+        const { listings, total } = await getActiveListings(paging);
+        res.json({ data: listings, pagination: { page: paging.page, limit: paging.limit, total } });
     } catch (error) {
-        console.error('Error en getActiveListings:', error);
-        res.status(500).json({ error: 'Error al obtener las publicaciones del mercado' });
+        next(error);
     }
 };
 
-const createListing = async (req, res) => {
-    const sellerId = req.user.userId;
-    const { inventoryId, price } = req.body;
-
-    if (!inventoryId || !price || price <= 0) {
-        return res.status(400).json({ error: 'Datos inválidos. El precio debe ser mayor a 0.' });
-    }
-
+const create = async (req, res, next) => {
     try {
-        const connection = await GetDB.getConnection();
-
-        const [inventoryCheck] = await connection.query(
-            'SELECT user_id FROM user_inventory WHERE inventory_id = ?',
-            [inventoryId]
-        );
-
-        if (inventoryCheck.length === 0) {
-            connection.release();
-            return res.status(404).json({ error: 'El ítem no existe en el inventario global.' });
-        }
-
-        if (inventoryCheck[0].user_id !== sellerId) {
-            connection.release();
-            return res.status(403).json({ error: 'No tienes permiso para vender un ítem que no te pertenece.' });
-        }
-
-        const [activeCheck] = await connection.query(
-            'SELECT listing_id FROM market_listings WHERE inventory_id = ? AND status = "active"',
-            [inventoryId]
-        );
-
-        if (activeCheck.length > 0) {
-            connection.release();
-            return res.status(400).json({ error: 'Este ítem ya se encuentra publicado a la venta.' });
-        }
-
-        const [result] = await connection.query(
-            'INSERT INTO market_listings (inventory_id, seller_id, price) VALUES (?, ?, ?)',
-            [inventoryId, sellerId, price]
-        );
-        connection.release();
-
-        const io = req.app.get('io');
-        if (io) {
-            io.emit('new_listing', {
-                listingId: result.insertId,
-                message: 'Un nuevo ítem ha sido publicado en el mercado.'
-            });
-        }
-
-        res.status(201).json({
-            message: 'Ítem publicado en el mercado con éxito',
-            listingId: result.insertId
-        });
+        const listingId = await createListing(req.user.userId, positiveId(req.body.inventoryId, 'inventoryId'), money(req.body.price, 'price'));
+        req.app.get('io')?.emit('new_listing', { listingId, message: 'Un nuevo ítem ha sido publicado en el mercado.' });
+        res.status(201).json({ message: 'Ítem publicado en el mercado con éxito', listingId });
     } catch (error) {
-        console.error('Error en createListing:', error);
-        res.status(500).json({ error: 'Error al procesar la publicación en el mercado.' });
+        next(error);
     }
 };
 
-const buyItem = async (req, res) => {
-    const buyerId = req.user.userId;
-    const { listingId } = req.params;
-
+const buy = async (req, res, next) => {
     try {
-        const result = await processPurchases(buyerId, listingId);
-
-        if (!result.success) {
-            if (result.message === 'Oferta no disponible') {
-                return res.status(404).json({ error: result.message });
-            }
-            if (result.message === 'No puedes comprar tu propia oferta' || result.message === 'Fondos insuficientes') {
-                return res.status(400).json({ error: result.message });
-            }
-            return res.status(500).json({ error: result.message });
-        }
-
-        const io = req.app.get('io');
-        if (io) {
-            io.emit('item_sold', {
-                listingId: listingId, 
-                message: 'Este ítem acaba de ser comprado.'
-            });
-        }
-
-        res.json({ message: result.message });
-
+        const listingId = positiveId(req.params.listingId, 'listingId');
+        await purchaseListing(req.user.userId, listingId);
+        req.app.get('io')?.emit('item_sold', { listingId, message: 'Este ítem acaba de ser comprado.' });
+        res.json({ message: 'Compra realizada con éxito' });
     } catch (error) {
-        console.error('Error en buyItem:', error);
-        res.status(500).json({ error: 'Error inesperado en el servidor.' });
+        next(error);
     }
 };
 
-export default { getActiveListings, createListing, buyItem };
+const cancel = async (req, res, next) => {
+    try {
+        const listingId = positiveId(req.params.listingId, 'listingId');
+        await cancelListing(req.user.userId, listingId);
+        req.app.get('io')?.emit('listing_cancelled', { listingId });
+        res.json({ message: 'Oferta cancelada con éxito' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const history = async (req, res, next) => {
+    try {
+        res.json({ data: await getUserTransactions(req.user.userId, pagination(req.query)) });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export default { getActiveListings: getListings, createListing: create, buyItem: buy, cancelListing: cancel, getHistory: history };

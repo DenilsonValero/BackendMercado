@@ -1,6 +1,5 @@
 import mysql from 'mysql2';
-import dotenv from 'dotenv';
-dotenv.config();
+import './env.js';
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
@@ -14,7 +13,6 @@ const pool = mysql.createPool({
 
 const GetDB = pool.promise();
 
-// AQUÍ ESTÁ EL CAMBIO CLAVE: Solo conectamos si NO estamos en modo test
 if (process.env.NODE_ENV !== 'test') {
     (async () => {
         try {

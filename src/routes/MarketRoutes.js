@@ -7,5 +7,7 @@ const router = express.Router();
 router.get('/', MarketController.getActiveListings);
 router.post('/sell', verifyToken, MarketController.createListing);
 router.post('/buy/:listingId', verifyToken, MarketController.buyItem);
+router.delete('/:listingId', verifyToken, MarketController.cancelListing);
+router.get('/history', verifyToken, MarketController.getHistory);
 
 export default router;

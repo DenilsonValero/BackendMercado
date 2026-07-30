@@ -1,21 +1,13 @@
-import db from '../config/DB.js';
+import { money } from '../shared/validation.js';
+import { creditTestBalance } from '../service/walletService.js';
 
-const addBalance = async (req, res) => {
-    const { amount } = req.body;
-    const userId = req.user.userId; 
-
-    if (!amount || amount <= 0) {
-        return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
-    }
-
+const addBalance = async (req, res, next) => {
     try {
-        await db.query(
-            'UPDATE users SET wallet_balance = wallet_balance + ? WHERE user_id = ?',
-            [amount, userId]
-        );
+        const amount = money(req.body.amount, 'amount');
+        await creditTestBalance(req.user.userId, amount);
         res.json({ message: `Se han acreditado $${amount} a tu cuenta` });
     } catch (error) {
-        res.status(500).json({ error: 'Error al procesar la carga de saldo' });
+        next(error);
     }
 };
 
