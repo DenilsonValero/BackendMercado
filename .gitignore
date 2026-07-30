@@ -4,8 +4,7 @@ node_modules/
 logs
 *.log
 npm-debug.log*
-#.env
 .env
-#.test
-test
-jest.config.js
+scripts
+db/
+docs

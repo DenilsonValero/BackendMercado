@@ -1,76 +1,60 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import authService from '../service/authService.js';
+import { getJwtSecret } from '../config/env.js';
+import AppError from '../shared/errors/AppError.js';
+import { positiveId, requiredString } from '../shared/validation.js';
 
-export const register = async (req, res) => {
-    const { username, email, password } = req.body;
+const usernameRule = /^[a-zA-Z0-9_]+$/;
+const emailRule = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!username || !email || !password) {
-        return res.status(400).json({ error: 'Todos los campos son obligatorios' });
-    }
-
+export const register = async (req, res, next) => {
     try {
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
-
+        const username = requiredString(req.body.username, 'username', { min: 3, max: 30, pattern: usernameRule });
+        const email = requiredString(req.body.email, 'email', { max: 254, pattern: emailRule }).toLowerCase();
+        const password = requiredString(req.body.password, 'password', { min: 8, max: 128 });
+        const passwordHash = await bcrypt.hash(password, 12);
         const result = await authService.createUser(username, email, passwordHash);
-
         res.status(201).json({ message: 'Usuario creado con éxito', userId: result.insertId });
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({ error: 'El email o usuario ya existe' });
-        }
-        res.status(500).json({ error: 'Error interno del servidor' });
+        if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'El email o usuario ya existe', code: 'DUPLICATE_USER' });
+        next(error);
     }
 };
 
-export const login = async (req, res) => {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Todos los campos son obligatorios' });
-    }
-
+export const login = async (req, res, next) => {
     try {
-        const users = await authService.getUserByEmail(email);
-        const user = users[0];
-
-        if (!user) {
-            return res.status(400).json({ error: 'Credenciales inválidas' });
-        }
-
-        const validPassword = await bcrypt.compare(password, user.password_hash);
-        if (!validPassword) {
-            return res.status(400).json({ error: 'Credenciales inválidas' });
-        }
-
-        const token = jwt.sign(
-            { userId: user.user_id, username: user.username },
-            process.env.JWT_SECRET || 'supersecreto',
-            { expiresIn: '1h' }
-        );
-
+        const email = requiredString(req.body.email, 'email', { max: 254, pattern: emailRule }).toLowerCase();
+        const password = requiredString(req.body.password, 'password', { min: 1, max: 128 });
+        const user = (await authService.getUserByEmail(email))[0];
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) throw new AppError('Credenciales inválidas', 401, 'INVALID_CREDENTIALS');
+        const secret = getJwtSecret();
+        if (!secret) throw new Error('JWT_SECRET no está configurado');
+        const token = jwt.sign({ userId: user.user_id, username: user.username }, secret, { expiresIn: '1h' });
         res.json({ token, wallet_balance: user.wallet_balance });
     } catch (error) {
-        res.status(500).json({ error: 'Error interno del servidor' });
+        next(error);
     }
 };
 
-export const profile = async (req, res) => {
+export const profile = async (req, res, next) => {
     try {
-        const targetUserId = req.params.id || req.user.userId;
-
-        const users = await authService.getUserById(targetUserId);
-
-        if (!users || users.length === 0) {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
-        }
-
-        const user = users[0];
-        const inventoryCount = await authService.getUserInventoryCount(targetUserId);
-
+        const user = (await authService.getUserById(req.user.userId))[0];
+        if (!user) throw new AppError('Usuario no encontrado', 404, 'USER_NOT_FOUND');
+        const inventoryCount = await authService.getUserInventoryCount(req.user.userId);
         res.json({ ...user, inventory_items: inventoryCount });
     } catch (error) {
-        res.status(500).json({ error: 'Error al obtener el perfil' });
+        next(error);
+    }
+};
+
+export const publicProfile = async (req, res, next) => {
+    try {
+        const userId = positiveId(req.params.id, 'id');
+        const user = (await authService.getPublicUserById(userId))[0];
+        if (!user) throw new AppError('Usuario no encontrado', 404, 'USER_NOT_FOUND');
+        res.json(user);
+    } catch (error) {
+        next(error);
     }
 };

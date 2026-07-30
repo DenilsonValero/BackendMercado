@@ -59,10 +59,24 @@ const getUserInventoryCount = async (userId) => {
     }
 };
 
+const getPublicUserById = async (userId) => {
+    const connection = await GetDB.getConnection();
+    try {
+        const [rows] = await connection.query(
+            'SELECT user_id, username, created_at FROM users WHERE user_id = ?',
+            [userId]
+        );
+        return rows;
+    } finally {
+        connection.release();
+    }
+};
+
 export default {
     getUserByEmail,
     getUserByUsername,
     createUser,
     getUserById,
-    getUserInventoryCount
+    getUserInventoryCount,
+    getPublicUserById
 };
