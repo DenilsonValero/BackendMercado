@@ -23,32 +23,23 @@ const signatureParts = (signature) => {
 };
 
 export const verifyMercadoPagoSignature = (req) => {
-    const { webhookSecret } = getMercadoPagoConfig();
+const { webhookSecret } = getMercadoPagoConfig();
     if (!webhookSecret) throw new AppError('Webhook de Mercado Pago no configurado', 503, 'WEBHOOK_NOT_CONFIGURED');
-    const { ts, v1, requestId: requestIdFromSignature } = signatureParts(req.get('x-signature'));
-    // El header separado es el formato oficial; el fallback cubre proxies que lo concatenan a v1.
+    
+    // 🔴 Declaramos la variable signature aquí correctamente
+    const signature = req.get('x-signature');
+    const { ts, v1, requestId: requestIdFromSignature } = signatureParts(signature);
+    
     const requestId = req.get('x-request-id') || requestIdFromSignature;
     const dataId = String(req.query['data.id'] || req.body?.data?.id || '').toLowerCase();
-
-    console.log("--- DEBUG FIRMA ---");
-    console.log("Header x-signature recibido:", signature);
-    console.log("Header x-request-id recibido:", requestId);
-    console.log("Data ID extraído:", dataId);
-    console.log("Timestamp (ts):", ts);
-    console.log("v1 extraído:", v1);
+    
     if (!ts || !v1 || !requestId || !dataId) return false;
 
     const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
     const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
-
-    console.log("Manifest construido:", manifest);
-    console.log("Firma esperada (nuestra):", expected);
-    console.log("Firma real (de MP):", v1);
-
     const actual = Buffer.from(v1, 'hex');
     const expectedBuffer = Buffer.from(expected, 'hex');
-    console.log("¿La firma es válida?:", isValid);
-    console.log("-------------------");
+    
     return actual.length === expectedBuffer.length && crypto.timingSafeEqual(actual, expectedBuffer);
 };
 
