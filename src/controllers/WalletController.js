@@ -1,5 +1,5 @@
-import { money } from '../shared/validation.js';
-import { creditTestBalance } from '../service/walletService.js';
+import { money, pagination } from '../shared/validation.js';
+import { creditTestBalance, createTopUpPreference, getTopUps } from '../service/walletService.js';
 
 const addBalance = async (req, res, next) => {
     try {
@@ -11,4 +11,22 @@ const addBalance = async (req, res, next) => {
     }
 };
 
-export default { addBalance };
+const createTopUp = async (req, res, next) => {
+    try {
+        const amount = money(req.body.amount, 'amount');
+        const preference = await createTopUpPreference(req.user.userId, amount);
+        res.status(201).json({ message: 'Preferencia de pago creada', ...preference });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const listTopUps = async (req, res, next) => {
+    try {
+        res.json({ data: await getTopUps(req.user.userId, pagination(req.query)) });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export default { addBalance, createTopUp, listTopUps };

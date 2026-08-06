@@ -4,7 +4,10 @@ dotenv.config({ quiet: true });
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-const requiredInProduction = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'JWT_SECRET', 'CORS_ORIGIN'];
+const requiredInProduction = [
+    'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'JWT_SECRET', 'CORS_ORIGIN',
+    'MP_ACCESS_TOKEN', 'MP_WEBHOOK_SECRET', 'MP_WEBHOOK_URL'
+];
 
 export const validateEnvironment = () => {
     if (process.env.NODE_ENV === 'test') return;
@@ -36,3 +39,9 @@ export const getAllowedOrigins = () => {
 };
 
 export const getJwtSecret = () => process.env.JWT_SECRET;
+
+export const getMercadoPagoConfig = () => ({
+    accessToken: process.env.MP_ACCESS_TOKEN,
+    webhookSecret: process.env.MP_WEBHOOK_SECRET,
+    webhookUrl: process.env.MP_WEBHOOK_URL?.replace(/\/$/, '')
+});

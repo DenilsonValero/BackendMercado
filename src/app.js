@@ -4,6 +4,7 @@ import authRoutes from './routes/AuthRouters.js';
 import marketRoutes from './routes/MarketRoutes.js';
 import inventoryRoutes from './routes/InventoryRoutes.js';
 import walletRoutes from './routes/WalletRoutes.js';
+import webhookRoutes from './routes/WebhookRoutes.js';
 import { getAllowedOrigins } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 
@@ -20,6 +21,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

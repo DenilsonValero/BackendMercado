@@ -28,6 +28,12 @@ API para un mercado de ítems con inventario, publicaciones, compras atómicas y
 
 Las rutas `/api/inventory/claim-test` y `/api/wallet/add-balance` son exclusivamente de desarrollo/test y responden `403` en producción. No son mecanismos de cobro reales.
 
+## Recargas con Mercado Pago
+
+La recarga real usa Checkout Pro: las tarjetas argentinas se cargan en la pagina segura de Mercado Pago. Con un JWT, crear una preferencia con `POST /api/wallet/topups` y `{ "amount": 1000 }`; el frontend debe redirigir al usuario a `checkoutUrl` (o a `sandboxCheckoutUrl` con credenciales de prueba). El saldo se acredita solamente cuando el webhook valida un pago `approved`.
+
+Aplicar `db/migrations/002_wallet_topups.sql`, configurar las variables `MP_*` de `.env.example` y registrar el evento **Payments** en el panel de Mercado Pago. Para probar en local, ejecutar `ngrok start mercado-api --config ngrok.yml`, copiar la URL HTTPS resultante en `MP_WEBHOOK_URL` agregando `/api/webhooks/mercadopago`, reiniciar la API y configurar esa misma URL como webhook de prueba en Mercado Pago.
+
 ## Reglas de integridad
 
 - El precio y los saldos usan `DECIMAL(12,2)`.

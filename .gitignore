@@ -8,3 +8,7 @@ npm-debug.log*
 scripts
 db/
 docs
+# Keep database migrations versioned; only other generated database files stay ignored.
+!db/
+!db/migrations/
+!db/migrations/*.sql
