@@ -34,12 +34,21 @@ const { webhookSecret } = getMercadoPagoConfig();
     const dataId = String(req.query['data.id'] || req.body?.data?.id || '').toLowerCase();
     
     if (!ts || !v1 || !requestId || !dataId) return false;
-
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
     const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
+    
+    // 🔍 Imprimimos el manifest exacto que armamos para compararlo
+    console.log("MANIFIESTO CALCULADO:", manifest);
+    console.log("ESPERADO:", expected);
+    console.log("RECIBIDO (v1):", v1);
+
     const actual = Buffer.from(v1, 'hex');
     const expectedBuffer = Buffer.from(expected, 'hex');
     
+    // MODO PRUEBA TEMPORAL: Si quieres que pase siempre mientras debugueas en Render, 
+    // puedes descomentar la siguiente línea temporalmente:
+    // return true; 
+
     return actual.length === expectedBuffer.length && crypto.timingSafeEqual(actual, expectedBuffer);
 };
 
