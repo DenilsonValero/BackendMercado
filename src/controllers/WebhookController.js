@@ -3,9 +3,17 @@ import AppError from '../shared/errors/AppError.js';
 import { getMercadoPagoConfig } from '../config/env.js';
 import { processMercadoPagoPayment } from '../service/walletService.js';
 
-const signatureParts = (signature) => Object.fromEntries(
-    String(signature || '').split(',').map((part) => part.trim().split('=').map((value) => value.trim()))
-);
+const signatureParts = (signature) => {
+    const parts = {};
+    String(signature || '').split(',').forEach((part) => {
+        const [key, val] = part.split('=').map((v) => v.trim());
+        if (key && val) {
+            // Si v1 trae un espacio y el requestId pegado, nos quedamos solo con la firma hexadecimal.
+            parts[key] = key === 'v1' ? val.split(' ')[0] : val;
+        }
+    });
+    return parts;
+};
 
 export const verifyMercadoPagoSignature = (req) => {
     const { webhookSecret } = getMercadoPagoConfig();
