@@ -31,4 +31,16 @@ describe('Mercado Pago webhook signature', () => {
 
         expect(verifyMercadoPagoSignature(req)).toBe(false);
     });
+
+    it('accepts a request id concatenated to v1 by a proxy', () => {
+        const signature = crypto.createHmac('sha256', secret)
+            .update(`id:${dataId};request-id:${requestId};ts:${timestamp};`)
+            .digest('hex');
+        const req = {
+            query: { 'data.id': dataId },
+            get: (name) => ({ 'x-signature': `ts=${timestamp},v1=${signature} ${requestId}` }[name])
+        };
+
+        expect(verifyMercadoPagoSignature(req)).toBe(true);
+    });
 });

@@ -8,8 +8,14 @@ const signatureParts = (signature) => {
     String(signature || '').split(',').forEach((part) => {
         const [key, val] = part.split('=').map((v) => v.trim());
         if (key && val) {
-            // Si v1 trae un espacio y el requestId pegado, nos quedamos solo con la firma hexadecimal.
-            parts[key] = key === 'v1' ? val.split(' ')[0] : val;
+            if (key === 'v1') {
+                // Algunos proxies concatenan x-request-id al valor de v1 con un espacio.
+                const [signature, requestId] = val.split(/\s+/, 2);
+                parts.v1 = signature;
+                if (requestId) parts.requestId = requestId;
+            } else {
+                parts[key] = val;
+            }
         }
     });
     return parts;
@@ -18,8 +24,9 @@ const signatureParts = (signature) => {
 export const verifyMercadoPagoSignature = (req) => {
     const { webhookSecret } = getMercadoPagoConfig();
     if (!webhookSecret) throw new AppError('Webhook de Mercado Pago no configurado', 503, 'WEBHOOK_NOT_CONFIGURED');
-    const { ts, v1 } = signatureParts(req.get('x-signature'));
-    const requestId = req.get('x-request-id');
+    const { ts, v1, requestId: requestIdFromSignature } = signatureParts(req.get('x-signature'));
+    // El header separado es el formato oficial; el fallback cubre proxies que lo concatenan a v1.
+    const requestId = req.get('x-request-id') || requestIdFromSignature;
     const dataId = String(req.query['data.id'] || '').toLowerCase();
     if (!ts || !v1 || !requestId || !dataId) return false;
 
