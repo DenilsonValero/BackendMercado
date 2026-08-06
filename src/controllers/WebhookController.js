@@ -34,7 +34,7 @@ const { webhookSecret } = getMercadoPagoConfig();
     const dataId = String(req.query['data.id'] || req.body?.data?.id || '').toLowerCase();
     
     if (!ts || !v1 || !requestId || !dataId) return false;
-const manifest = `id:${dataId};ts:${ts};`;
+    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
     const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
     
     // 🔍 Imprimimos el manifest exacto que armamos para compararlo
