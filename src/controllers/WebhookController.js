@@ -31,10 +31,19 @@ const { webhookSecret } = getMercadoPagoConfig();
     const { ts, v1, requestId: requestIdFromSignature } = signatureParts(signature);
     
     const requestId = req.get('x-request-id') || requestIdFromSignature;
-    const dataId = String(req.query['data.id'] || req.body?.data?.id || '').toLowerCase();
+    let dataId = String(req.query['data.id'] || req.body?.data?.id || '').toLowerCase();
+
+    // Cuando el webhook se envía con un cuerpo JSON, Mercado Pago puede usar
+    // el cuerpo crudo para generar la firma. Intentamos parsearlo para obtener el ID.
+    if (!dataId && req.rawBody) {
+        try {
+            const body = JSON.parse(req.rawBody.toString());
+            dataId = String(body?.data?.id || '').toLowerCase();
+        } catch (e) { /* Ignoramos el error si el cuerpo no es JSON válido */ }
+    }
     
     if (!ts || !v1 || !requestId || !dataId) return false;
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    const manifest = `id:${dataId};ts:${ts};`;
     const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
     
     // 🔍 Imprimimos el manifest exacto que armamos para compararlo
