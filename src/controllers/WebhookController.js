@@ -23,7 +23,6 @@ export const verifyMercadoPagoSignature = (req) => {
 };
 
 const receiveMercadoPago = async (req, res, next) => {
-    return res.sendStatus(200);
     try {
         console.log("🔔 [WEBHOOK] Petición recibida en receiveMercadoPago");
         console.log("Headers entrantes:", req.headers['x-signature'], req.headers['x-request-id']);
