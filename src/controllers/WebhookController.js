@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import AppError from '../shared/errors/AppError.js';
+import express from 'express';
 import { getMercadoPagoConfig } from '../config/env.js';
 import { processMercadoPagoPayment } from '../service/walletService.js';
 
@@ -37,21 +38,33 @@ export const verifyMercadoPagoSignature = (req) => {
     return actual.length === expectedBuffer.length && crypto.timingSafeEqual(actual, expectedBuffer);
 };
 
+const preReceiveMercadoPago = express.json({
+    verify: (req, res, buf) => { req.rawBody = buf; },
+    type: '*/*'
+});
+
 const receiveMercadoPago = async (req, res, next) => {
     try {
-        console.log("🔔 [WEBHOOK] Petición recibida en receiveMercadoPago");
-        console.log("Headers entrantes:", req.headers['x-signature'], req.headers['x-request-id']);
-        console.log("Query params:", req.query);
+        const signature = req.get('x-signature');
+        const requestId = req.get('x-request-id');
+        const dataId = req.query['data.id'] || req.body?.data?.id;
+        const eventType = req.body?.type || req.query.type;
+
+        console.log(`🔔 [WEBHOOK] Petición recibida. Evento: ${eventType}, ID: ${dataId}, Request-ID: ${requestId}`);
+
         if (!verifyMercadoPagoSignature(req)) {
-            console.log("❌ [WEBHOOK] Firma inválida. Abortando proceso con 401.");
+            console.warn(`❌ [WEBHOOK] Firma inválida para ${dataId}. Signature: ${signature?.substring(0, 15)}...`);
             return res.status(401).json({ error: 'Firma de webhook invalida', code: 'INVALID_WEBHOOK_SIGNATURE' });
         }
-        const paymentId = req.query['data.id'] || req.body?.data?.id;
-        const eventType = req.body?.type || req.query.type;
-        console.log(`✅ [WEBHOOK] Firma válida. Tipo de evento: ${eventType} | ID: ${paymentId}`);
-        if (!paymentId || (eventType && eventType !== 'payment')) return res.sendStatus(200);
-        await processMercadoPagoPayment(paymentId);
-        console.log(`💰 [WEBHOOK] Pago ${paymentId} procesado correctamente en la BD.`);
+        console.log(`✅ [WEBHOOK] Firma válida para ${dataId}.`);
+
+        if (!dataId || (eventType && eventType !== 'payment')) {
+            console.log(`[WEBHOOK] Evento ignorado (no es un pago o no tiene ID). Respondiendo 200.`);
+            return res.sendStatus(200);
+        }
+
+        await processMercadoPagoPayment(dataId);
+        console.log(`💰 [WEBHOOK] Pago ${dataId} procesado correctamente en la BD.`);
         return res.sendStatus(200);
     } catch (error) {
         console.error("🔥 [WEBHOOK] Error crítico en el controlador:", error);
@@ -59,4 +72,4 @@ const receiveMercadoPago = async (req, res, next) => {
     }
 };
 
-export default { receiveMercadoPago };
+export default { preReceiveMercadoPago, receiveMercadoPago };
