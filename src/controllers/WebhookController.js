@@ -27,7 +27,7 @@ export const verifyMercadoPagoSignature = (req) => {
     const { ts, v1, requestId: requestIdFromSignature } = signatureParts(req.get('x-signature'));
     // El header separado es el formato oficial; el fallback cubre proxies que lo concatenan a v1.
     const requestId = req.get('x-request-id') || requestIdFromSignature;
-    const dataId = String(req.query['data.id'] || '').toLowerCase();
+    const dataId = String(req.query['data.id'] || req.body?.data?.id || '').toLowerCase();
     if (!ts || !v1 || !requestId || !dataId) return false;
 
     const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
