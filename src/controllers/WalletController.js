@@ -1,5 +1,5 @@
-import { money, pagination } from '../shared/validation.js';
-import { creditTestBalance, createTopUpPreference, getTopUps } from '../service/walletService.js';
+import { money, pagination, positiveId } from '../shared/validation.js';
+import { creditTestBalance, createTopUpPreference, getTopUps, checkAndUpdatePayment } from '../service/walletService.js';
 
 const addBalance = async (req, res, next) => {
     try {
@@ -29,4 +29,14 @@ const listTopUps = async (req, res, next) => {
     }
 };
 
-export default { addBalance, createTopUp, listTopUps };
+const checkTopUp = async (req, res, next) => {
+    try {
+        const topupId = positiveId(req.params.topupId, 'topupId');
+        const result = await checkAndUpdatePayment(topupId, req.user.userId);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export default { addBalance, createTopUp, listTopUps, checkTopUp };

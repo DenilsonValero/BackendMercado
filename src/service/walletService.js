@@ -2,6 +2,7 @@ import db from '../config/DB.js';
 import crypto from 'crypto';
 import AppError from '../shared/errors/AppError.js';
 import { getMercadoPagoConfig } from '../config/env.js';
+import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
 
 export const creditTestBalance = async (userId, amount) => {
     const connection = await db.getConnection();
@@ -24,32 +25,18 @@ export const creditTestBalance = async (userId, amount) => {
     }
 };
 
-const mercadoPagoApi = 'https://api.mercadopago.com';
-
-const requireMercadoPagoConfig = () => {
-    const config = getMercadoPagoConfig();
-    if (!config.accessToken || !config.webhookUrl) {
+const getMercadoPagoClient = () => {
+    const { accessToken, webhookUrl } = getMercadoPagoConfig();
+    if (!accessToken || !webhookUrl) {
         throw new AppError('Mercado Pago no esta configurado en el servidor', 503, 'PAYMENT_PROVIDER_NOT_CONFIGURED');
     }
-    return config;
-};
-
-const mercadoPagoRequest = async (path, options = {}) => {
-    const { accessToken } = requireMercadoPagoConfig();
-    const response = await fetch(`${mercadoPagoApi}${path}`, {
-        ...options,
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', ...options.headers }
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        console.error('Mercado Pago API error:', response.status, data);
-        throw new AppError('No se pudo comunicar con Mercado Pago', 502, 'PAYMENT_PROVIDER_ERROR');
-    }
-    return data;
+    // Inicializar el cliente con tu Access Token
+    return new MercadoPagoConfig({ accessToken });
 };
 
 export const createTopUpPreference = async (userId, amount) => {
-    const { webhookUrl } = requireMercadoPagoConfig();
+    const { webhookUrl } = getMercadoPagoConfig();
+    const client = getMercadoPagoClient();
     const externalReference = crypto.randomUUID();
     const [created] = await db.query(
         "INSERT INTO wallet_topups (user_id, amount, external_reference, status) VALUES (?, ?, ?, 'pending')",
@@ -57,9 +44,9 @@ export const createTopUpPreference = async (userId, amount) => {
     );
 
     try {
-        const preference = await mercadoPagoRequest('/checkout/preferences', {
-            method: 'POST',
-            body: JSON.stringify({
+        const preferenceClient = new Preference(client);
+        const preference = await preferenceClient.create({
+            body: {
                 items: [{
                     id: `wallet-topup-${created.insertId}`,
                     title: 'Recarga de saldo',
@@ -69,8 +56,8 @@ export const createTopUpPreference = async (userId, amount) => {
                 }],
                 external_reference: externalReference,
                 metadata: { wallet_topup_id: String(created.insertId), user_id: String(userId) },
-                notification_url: `${webhookUrl}?source_news=webhooks`
-            })
+                notification_url: `${webhookUrl}?source_news=webhooks`,
+            },
         });
         await db.query('UPDATE wallet_topups SET preference_id = ? WHERE topup_id = ?', [preference.id, created.insertId]);
         return {
@@ -80,8 +67,9 @@ export const createTopUpPreference = async (userId, amount) => {
             sandboxCheckoutUrl: preference.sandbox_init_point
         };
     } catch (error) {
+        console.error('Error al crear la preferencia de pago en Mercado Pago:', error);
         await db.query("UPDATE wallet_topups SET status = 'preference_error' WHERE topup_id = ?", [created.insertId]);
-        throw error;
+        throw new AppError('No se pudo crear la preferencia de pago con Mercado Pago', 502, 'PAYMENT_PROVIDER_ERROR');
     }
 };
 
@@ -95,7 +83,20 @@ export const getTopUps = async (userId, { limit, offset }) => {
 };
 
 export const processMercadoPagoPayment = async (paymentId) => {
-    const payment = await mercadoPagoRequest(`/v1/payments/${encodeURIComponent(paymentId)}`);
+    const client = getMercadoPagoClient();
+    const paymentClient = new Payment(client);
+    let payment;
+    try {
+        payment = await paymentClient.get({ id: paymentId });
+    } catch (error) {
+        console.error(`Error al consultar el pago ${paymentId} en la API de Mercado Pago:`, error);
+        if (error.cause?.statusCode === 404) {
+            console.warn(`[SYNC/WEBHOOK] El pago ${paymentId} no fue encontrado en Mercado Pago.`);
+            return { ignored: true };
+        }
+        throw new AppError('No se pudo comunicar con Mercado Pago para obtener el pago', 502, 'PAYMENT_PROVIDER_ERROR');
+    }
+
     const externalReference = payment.external_reference;
     if (!externalReference) return { ignored: true };
 
@@ -155,4 +156,34 @@ export const processMercadoPagoPayment = async (paymentId) => {
     } finally {
         connection.release();
     }
+};
+
+export const checkAndUpdatePayment = async (topupId, userId) => {
+    const [topups] = await db.query(
+        `SELECT topup_id, user_id, status, provider_payment_id
+         FROM wallet_topups
+         WHERE topup_id = ? AND user_id = ?`,
+        [topupId, userId]
+    );
+
+    if (!topups.length) {
+        throw new AppError('Recarga no encontrada o no te pertenece', 404, 'TOPUP_NOT_FOUND');
+    }
+
+    const topup = topups[0];
+
+    if (topup.status === 'approved') {
+        return { status: 'approved', message: 'La recarga ya estaba acreditada.' };
+    }
+
+    if (!topup.provider_payment_id) {
+        throw new AppError('La recarga está pendiente pero aún no tiene un pago de Mercado Pago asociado.', 404, 'PAYMENT_NOT_FOUND');
+    }
+
+    console.log(`[SYNC] Verificando estado del pago ${topup.provider_payment_id} para la recarga ${topupId}...`);
+    const result = await processMercadoPagoPayment(topup.provider_payment_id);
+
+    return result.approved
+        ? { status: 'approved', message: 'La recarga ha sido acreditada con éxito.' }
+        : { status: result.status || 'pending', message: `El estado del pago en Mercado Pago es: ${result.status}.` };
 };
