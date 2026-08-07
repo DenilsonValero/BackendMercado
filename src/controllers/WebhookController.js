@@ -42,8 +42,8 @@ const { webhookSecret } = getMercadoPagoConfig();
         } catch (e) { /* Ignoramos el error si el cuerpo no es JSON válido */ }
     }
     
-    if (!ts || !v1 || !dataId) return false;
-    const manifest = `data-id:${dataId};ts:${ts};`;
+    if (!ts || !v1 || !dataId || !requestId) return false;
+    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
     const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
     
     // 🔍 Imprimimos el manifest exacto que armamos para compararlo

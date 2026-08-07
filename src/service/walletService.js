@@ -160,7 +160,7 @@ export const processMercadoPagoPayment = async (paymentId) => {
 
 export const checkAndUpdatePayment = async (topupId, userId) => {
     const [topups] = await db.query(
-        `SELECT topup_id, user_id, status, provider_payment_id
+        `SELECT topup_id, user_id, status, provider_payment_id, external_reference
          FROM wallet_topups
          WHERE topup_id = ? AND user_id = ?`,
         [topupId, userId]
@@ -176,8 +176,35 @@ export const checkAndUpdatePayment = async (topupId, userId) => {
         return { status: 'approved', message: 'La recarga ya estaba acreditada.' };
     }
 
+    // Si no tenemos un ID de pago (porque el webhook falló), lo buscamos por referencia externa.
     if (!topup.provider_payment_id) {
-        throw new AppError('La recarga está pendiente pero aún no tiene un pago de Mercado Pago asociado.', 404, 'PAYMENT_NOT_FOUND');
+        if (!topup.external_reference) {
+            throw new AppError('La recarga es inválida y no tiene referencia externa para buscar el pago.', 500, 'INVALID_TOPUP_STATE');
+        }
+
+        console.log(`[SYNC] La recarga no tiene pago asociado. Buscando por referencia externa ${topup.external_reference}...`);
+        const client = getMercadoPagoClient();
+        const paymentClient = new Payment(client);
+
+        try {
+            const searchResult = await paymentClient.search({ options: { external_reference: topup.external_reference, sort: 'date_created', criteria: 'desc' } });
+            const approvedPayment = searchResult.results?.find(p => p.status === 'approved');
+
+            if (!approvedPayment) {
+                return { status: topup.status, message: 'No se encontró un pago aprobado para esta recarga en Mercado Pago.' };
+            }
+
+            console.log(`[SYNC] Encontrado pago aprobado ${approvedPayment.id}. Procesando...`);
+            const result = await processMercadoPagoPayment(approvedPayment.id);
+
+            return result.approved
+                ? { status: 'approved', message: 'La recarga ha sido acreditada con éxito tras la búsqueda manual.' }
+                : { status: result.status || 'pending', message: `El estado del pago en Mercado Pago es: ${result.status}.` };
+
+        } catch (error) {
+            console.error(`[SYNC] Error buscando pago por referencia externa ${topup.external_reference}:`, error);
+            throw new AppError('No se pudo comunicar con Mercado Pago para buscar el pago.', 502, 'PAYMENT_PROVIDER_ERROR');
+        }
     }
 
     console.log(`[SYNC] Verificando estado del pago ${topup.provider_payment_id} para la recarga ${topupId}...`);
