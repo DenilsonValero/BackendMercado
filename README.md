@@ -8,6 +8,7 @@ API para un mercado de ítems con inventario, publicaciones, compras atómicas y
 2. Creá una base MySQL 8 vacía y aplicá `db/migrations/001_initial_schema.sql`.
 3. Ejecutá `npm install`, después `npm run dev`.
 4. Para el catálogo de ejemplo, ejecutá `node src/utils/seeder.js`.
+5. Para correr la suite de pruebas, ejecutá `npm test`.
 
 `JWT_SECRET` debe ser aleatorio y tener 32 caracteres o más. En producción también es obligatorio configurar `CORS_ORIGIN` con los orígenes exactos del frontend.
 
@@ -25,6 +26,9 @@ API para un mercado de ítems con inventario, publicaciones, compras atómicas y
 | POST | `/api/market/buy/:listingId` | Comprar publicación |
 | DELETE | `/api/market/:listingId` | Cancelar publicación propia |
 | GET | `/api/market/history` | Historial propio |
+| POST | `/api/wallet/topups` | Crear preferencia de pago (MP) |
+| GET | `/api/wallet/topups` | Historial de recargas |
+| POST | `/api/wallet/topups/:topupId/check` | Sincronizar recarga pendiente |
 
 Las rutas `/api/inventory/claim-test` y `/api/wallet/add-balance` son exclusivamente de desarrollo/test y responden `403` en producción. No son mecanismos de cobro reales.
 
@@ -33,6 +37,16 @@ Las rutas `/api/inventory/claim-test` y `/api/wallet/add-balance` son exclusivam
 La recarga real usa Checkout Pro: las tarjetas argentinas se cargan en la pagina segura de Mercado Pago. Con un JWT, crear una preferencia con `POST /api/wallet/topups` y `{ "amount": 1000 }`; el frontend debe redirigir al usuario a `checkoutUrl` (o a `sandboxCheckoutUrl` con credenciales de prueba). El saldo se acredita solamente cuando el webhook valida un pago `approved`.
 
 Aplicar `db/migrations/002_wallet_topups.sql`, configurar las variables `MP_*` de `.env.example` y registrar el evento **Payments** en el panel de Mercado Pago. Para probar en local, ejecutar `ngrok start mercado-api --config ngrok.yml`, copiar la URL HTTPS resultante en `MP_WEBHOOK_URL` agregando `/api/webhooks/mercadopago`, reiniciar la API y configurar esa misma URL como webhook de prueba en Mercado Pago.
+
+Si un webhook falla por cualquier motivo, el frontend puede ofrecer una opción para re-verificar el estado de una recarga pendiente llamando a `POST /api/wallet/topups/:topupId/check`. Este endpoint buscará activamente el pago en Mercado Pago y acreditará el saldo si corresponde.
+
+## Eventos en tiempo real (Socket.IO)
+
+El servidor emite los siguientes eventos para mantener a los clientes sincronizados:
+
+-   `new_listing`: Se emite cuando un usuario publica un nuevo ítem.
+-   `item_sold`: Se emite cuando un ítem es comprado.
+-   `listing_cancelled`: Se emite cuando un vendedor cancela su publicación.
 
 ## Reglas de integridad
 
